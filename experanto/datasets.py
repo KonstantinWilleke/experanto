@@ -529,4 +529,130 @@ class ChunkDataset(Dataset):
             times = times - times.min()
         out["timestamps"] = torch.from_numpy(times)
         return out
+    
 
+from experanto.utils import add_behavior_as_channels, replace_nan_with_batch_mean
+from typing import Optional, Union, List
+
+
+class TargetedChunkDataset(ChunkDataset):
+    def __init__(
+            self,
+            root_folder: str,
+            global_sampling_rate: None,
+            global_chunk_size: None,
+            modality_config: dict = DEFAULT_MODALITY_CONFIG,
+            add_behavior_as_channels: bool = False,
+            replace_nans_with_means: bool = False,
+            sample_times: Optional[Iterable] = None,
+            history: float = 0.,
+            valid_time_difference: list = [0.04, 0.160],
+
+    ) -> None:
+        """
+        :param sample_times: a list of timestamps. Each timestamp will be turned into a chunk
+        :param history: history in seconds of where the chunk should start
+        :param valid_time_difference: the interval in seconds, relative to the timestamp of interest
+        """
+        super().__init__(root_folder=root_folder,
+                         global_sampling_rate=global_sampling_rate,
+                         global_chunk_size=global_chunk_size,
+                         modality_config=modality_config,
+                         add_behavior_as_channels=add_behavior_as_channels,
+                         replace_nans_with_means=replace_nans_with_means,
+                         )
+
+        self._sample_times = sample_times
+        self.history = history
+        self.valid_time_difference = valid_time_difference
+
+        # check if all offsets in the modality config are zero:
+        for device_name in self.device_names:
+            if self.modality_config[device_name].offset != 0:
+                raise ValueError(f"Offset in modality config for {device_name} has to be Zero for this dataloader. ")
+
+
+    def __getitem__(self, idx) -> dict:
+        out = {}
+        s = self._valid_screen_times[idx] # s is the start time of the sample of interest
+        for device_name in self.device_names:
+            sampling_rate = self.sampling_rates[device_name]
+            chunk_size = self.chunk_sizes[device_name]
+            chunk_s = chunk_size / sampling_rate
+
+            times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
+            times = times - self.history
+            data, _ = self._experiment.interpolate(times, device=device_name)
+            if device_name == "responses":
+                relative_times = times - s
+                delta_min = self.valid_time_difference[0]
+                delta_max = self.valid_time_difference[1]
+                valid_mask = ((relative_times) >= delta_min) & ((relative_times) <= delta_max)
+                valid_indices = np.where(valid_mask)[0] # these are the indices of the samples that are of interest
+
+            if self.replace_nans_with_means:
+                if np.any(np.isnan(data)):
+                    data = replace_nan_with_batch_mean(data)
+
+            out[device_name] = self.transforms[device_name](data).squeeze(
+                0)  # remove dim0 for response/eye_tracker/treadmill
+            # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
+            if device_name == "screen":
+                if out[device_name].shape[-1] == 3:
+                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
+
+        if self.add_behavior_as_channels:
+            out = add_behavior_as_channels(out)
+        if self._experiment.devices["responses"].use_phase_shifts:
+            phase_shifts = self._experiment.devices["responses"]._phase_shifts
+            times = (times - times.min())[:, None] + phase_shifts[None, :]
+        else:
+            times = times - times.min()
+        out["timestamps"] = torch.from_numpy(times)
+        out["valid_indices"] = torch.from_numpy(valid_indices)
+        return out
+
+    def set_sample_times_from_conditions(
+            self,
+            tier: Optional[Union[str, List[str]]] = None,
+            valid_trials_only: bool = False,
+            use_first_frame: bool = True
+    ) -> None:
+        """
+        Update sample times based on trial conditions.
+        
+        Args:
+            tier: String or list of strings specifying which tiers to include ('train', 'test', etc)
+            valid_trials_only: If True, only include trials marked as valid
+            use_first_frame: If True, use first_frame_idx timestamps, otherwise use all frame timestamps
+        """
+        # Get all trials
+        trials = self._trials
+        
+        # Filter by tier if specified
+        if tier is not None:
+            if isinstance(tier, str):
+                tier = [tier]
+            trials = [t for t in trials if t.get_meta('tier') in tier]
+            
+        # Filter by valid_trial if specified
+        if valid_trials_only:
+            trials = [t for t in trials if t.get_meta('valid_trial')]
+
+        # Get timestamps
+        timestamps = self._experiment.devices['screen'].timestamps
+        
+        # Extract times based on first_frame or all frames
+        sample_times = []
+        if use_first_frame:
+            for trial in trials:
+                first_frame_idx = trial.get_meta('first_frame_idx')
+                if first_frame_idx is not None:
+                    sample_times.append(timestamps[first_frame_idx])
+        else:
+            for trial in trials:
+                frame_indices = trial.get_meta('frame_idx')
+                if frame_indices is not None:
+                    sample_times.extend(timestamps[frame_indices])
+                    
+        self._valid_screen_times = np.array(sample_times)
