@@ -42,7 +42,7 @@ dataset:
       chunk_size: null
       offset: 0
       transforms:
-        normalization: "recompute_behavior"
+        normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
 
