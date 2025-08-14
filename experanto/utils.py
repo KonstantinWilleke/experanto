@@ -479,6 +479,8 @@ class FastSessionDataLoader:
         drop_last=False,
         cycle_mode: Literal['active', 'balanced'] = 'active',
         seed=None,
+        session_sampler_seed=None,
+        use_different_seeds_for_sessions=False,
         **kwargs,
     ):
         """
@@ -527,14 +529,16 @@ class FastSessionDataLoader:
         for i, session_name in enumerate(self.session_names):
             indices = self.session_indices[session_name]
             # Derive a unique seed for each session sampler
-            session_seed = None if seed is None else seed + i + 1
+            session_sampler_seed = seed if session_sampler_seed is None else session_sampler_seed
+            if use_different_seeds_for_sessions:
+                session_sampler_seed = session_sampler_seed + i
             # Create a specific sampler for this session
             session_sampler = SessionSpecificSampler(
                 indices=indices,
                 batch_size=batch_size,
                 drop_last=drop_last,
                 shuffle=shuffle,
-                seed=session_seed,
+                seed=session_sampler_seed,
             )
 
             # Create a DataLoader for this session
