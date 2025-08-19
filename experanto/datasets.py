@@ -328,10 +328,6 @@ class ChunkDataset(Dataset):
           interpolation:
             interpolation_mode: nearest_neighbor
         """
-
-
-        asdkjasdkjashd
-
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
 
