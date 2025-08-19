@@ -294,7 +294,7 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.float32)
+        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.uint8)
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
@@ -409,7 +409,7 @@ class BlankTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.uint8)
 
 
 class InvalidTrial(ScreenTrial):
@@ -428,4 +428,4 @@ class InvalidTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.uint8)
