@@ -717,9 +717,9 @@ class ChunkDataset(Dataset):
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
                 if len(data.shape) == 3:
-                    data = torch.from_numpy(data[:, None, ...])
+                    data = torch.from_numpy(data[:, None, ...]).to(torch.float32)
                 else:
-                    data = torch.from_numpy(data)
+                    data = torch.from_numpy(data).to(torch.float32)
 
                 data = self.transforms[device_name](data)
                 if out[device_name].shape[-1] == 3:
