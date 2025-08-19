@@ -722,13 +722,15 @@ class ChunkDataset(Dataset):
             times = times + self.modality_config[device_name].offset
 
             data, _ = self._experiment.interpolate(times, device=device_name)
-            out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
-            # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
+            # TODO: find better convention for image, video, color, gray channels.
+            # This makes the monkey data same as mouse.
             if device_name == "screen":
                 if out[device_name].shape[-1] == 3:
                     out[device_name] = out[device_name].permute(0, 3, 1, 2).contiguous()
                 if out[device_name].shape[0] == chunk_size:
                     out[device_name] = out[device_name].transpose(0, 1).contiguous()
+            else:
+                out[device_name] = self.transforms[device_name](data).squeeze(0)
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
