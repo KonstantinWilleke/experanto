@@ -472,7 +472,7 @@ class ChunkDataset(Dataset):
 
             if self.modality_config[device_name].transforms.get("normalization", False):
                 transform_list.append(
-                    v2.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
+                    v2.Normalize(self._statistics[device_name]["mean"].squeeze(), self._statistics[device_name]["std"].squeeze())
                 )
 
             transforms[device_name] = Compose(transform_list)
