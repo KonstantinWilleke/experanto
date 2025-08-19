@@ -726,9 +726,9 @@ class ChunkDataset(Dataset):
             # This makes the monkey data same as mouse.
             if device_name == "screen":
                 screen_data = self.transforms[device_name](data)
-                if out[device_name].shape[-1] == 3:
+                if screen_data.shape[-1] == 3:
                     out[device_name] = screen_data.permute(0, 3, 1, 2).contiguous()
-                if out[device_name].shape[0] == chunk_size:
+                if screen_data.shape[0] == chunk_size:
                     out[device_name] = screen_data.transpose(0, 1).contiguous()
             else:
                 out[device_name] = self.transforms[device_name](data).squeeze(0)
