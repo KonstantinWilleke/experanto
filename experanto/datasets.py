@@ -721,7 +721,7 @@ class ChunkDataset(Dataset):
                 else:
                     return torch.from_numpy(data)
 
-                print(data.shape)
+                asdjhsagdjhasgd
 
                 screen_data = self.transforms[device_name](data.transpose(0,1))
                 print(data.shape)
