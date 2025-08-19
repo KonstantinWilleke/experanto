@@ -726,14 +726,9 @@ class ChunkDataset(Dataset):
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
                 if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
+                    out[device_name] = out[device_name].permute(0, 3, 1, 2).contiguous()
                 if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = out[device_name].transpose(0, 1)
-
-            #if device_name == 'responses':
-            #    if self._experiment.devices["responses"].use_phase_shifts:
-            #        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-            #        times = times[:, None] + phase_shifts[None, :]
+                    out[device_name] = out[device_name].transpose(0, 1).contiguous()
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
@@ -743,21 +738,7 @@ class ChunkDataset(Dataset):
 
         out["timestamps"] = timestamps
 
-        #deprecated
-        if self.add_behavior_as_channels:
-            out = add_behavior_as_channels(out)
-
-        final_out = {}
-        for key in out:
-            if key in self.out_keys:
-                if key == "timestamps":
-                    final_out[key] = out[key]
-                elif not out[key].is_contiguous():
-                    final_out[key] = out[key].contiguous()
-                else:
-                    final_out[key] = out[key]
-
-        return final_out
+        return out
     
     def reset_state(self):
         """Reset the state of the dataset."""
