@@ -449,12 +449,6 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
-    @staticmethod
-    def add_channel_function(x):
-        if len(x.shape) == 3:
-            return torch.from_numpy(x[:, None, ...])
-        else:
-            return torch.from_numpy(x)
 
     def initialize_transforms(self):
         """
@@ -464,9 +458,7 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                add_channel = Lambda(self.add_channel_function)
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
-                transform_list.insert(0, add_channel)
             else:
                 transform_list = [ToTensor()]
 
@@ -721,19 +713,21 @@ class ChunkDataset(Dataset):
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
 
-            data, _ = self._experiment.interpolate(times, device=device_name)
-            out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
+            data, _ = self._experiment.interpolate(times, device=device_name) # remove dim0 for response/eye_tracker/treadmill
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
-                if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
-                if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = out[device_name].transpose(0, 1)
+                if len(data.shape) == 3:
+                    data = torch.from_numpy(x[:, None, ...])
+                else:
+                    data = torch.from_numpy(x)
 
-            #if device_name == 'responses':
-            #    if self._experiment.devices["responses"].use_phase_shifts:
-            #        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-            #        times = times[:, None] + phase_shifts[None, :]
+                data = self.transforms[device_name](data)
+                if out[device_name].shape[-1] == 3:
+                    out[device_name] = data.permute(0, 3, 1, 2)
+                if out[device_name].shape[0] == chunk_size:
+                    out[device_name] = data.transpose(0, 1)
+            else:
+                out[device_name] = self.transforms[device_name](data).squeeze(0)
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
