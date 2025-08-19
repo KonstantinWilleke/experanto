@@ -725,10 +725,11 @@ class ChunkDataset(Dataset):
             # TODO: find better convention for image, video, color, gray channels.
             # This makes the monkey data same as mouse.
             if device_name == "screen":
+                screen_data = self.transforms[device_name](data)
                 if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2).contiguous()
+                    out[device_name] = screen_data.permute(0, 3, 1, 2).contiguous()
                 if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = out[device_name].transpose(0, 1).contiguous()
+                    out[device_name] = screen_data.transpose(0, 1).contiguous()
             else:
                 out[device_name] = self.transforms[device_name](data).squeeze(0)
 
