@@ -328,6 +328,10 @@ class ChunkDataset(Dataset):
           interpolation:
             interpolation_mode: nearest_neighbor
         """
+
+
+        asdkjasdkjashd
+
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
 
@@ -720,11 +724,7 @@ class ChunkDataset(Dataset):
                     return torch.from_numpy(data[:, None, ...])
                 else:
                     return torch.from_numpy(data)
-
-                asdjhsagdjhasgd
-
                 screen_data = self.transforms[device_name](data.transpose(0,1))
-                print(data.shape)
                 if screen_data.shape[-1] == 3:
                     out[device_name] = screen_data.permute(0, 3, 1, 2).contiguous()
                 if screen_data.shape[0] == chunk_size:
