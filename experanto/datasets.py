@@ -717,22 +717,25 @@ class ChunkDataset(Dataset):
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
                 if len(data.shape) == 3:
-                    data = torch.from_numpy(data[:, None, ...]).to(torch.float32)
+                    data = torch.from_numpy(data[:, None, ...]).float()
                 else:
-                    data = torch.from_numpy(data).to(torch.float32)
+                    data = torch.from_numpy(data).float()
 
                 data = self.transforms[device_name](data)
-                if out[device_name].shape[-1] == 3:
-                    out[device_name] = data.permute(0, 3, 1, 2)
-                if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = data.transpose(0, 1)
+
+                if data.shape[-1] == 3:
+                    data = data.permute(0, 3, 1, 2)
+                if data.shape[0] == chunk_size:
+                    data = data.transpose(0, 1) # (T, C, H, W) -> (C, T, H, W)
+
+                out[device_name] = data.contiguous()
             else:
                 out[device_name] = self.transforms[device_name](data).squeeze(0)
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
                 times = times - self._experiment.devices["responses"].start_time
-                times = times.to(torch.float32).contiguous()
+                times = times.float()
             timestamps[device_name] =  times
 
         out["timestamps"] = timestamps
@@ -741,17 +744,7 @@ class ChunkDataset(Dataset):
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
 
-        final_out = {}
-        for key in out:
-            if key in self.out_keys:
-                if key == "timestamps":
-                    final_out[key] = out[key]
-                elif not out[key].is_contiguous():
-                    final_out[key] = out[key].contiguous()
-                else:
-                    final_out[key] = out[key]
-
-        return final_out
+        return out
     
     def reset_state(self):
         """Reset the state of the dataset."""
