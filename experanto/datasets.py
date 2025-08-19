@@ -470,10 +470,9 @@ class ChunkDataset(Dataset):
             else:
                 transform_list = [ToTensor()]
 
-            # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 transform_list.append(
-                    torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
+                    v2.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
                 )
 
             transforms[device_name] = Compose(transform_list)
