@@ -724,11 +724,11 @@ class ChunkDataset(Dataset):
                 data = self.transforms[device_name](data)
 
                 if data.shape[-1] == 3:
-                    data = data.permute(0, 3, 1, 2)
+                    data = data.permute(3, 0, 1, 2).contiguous() # (T, H, W, C) => (C, T, H, W)
                 if data.shape[0] == chunk_size:
-                    data = data.transpose(0, 1) # (T, C, H, W) -> (C, T, H, W)
+                    data = data.transpose(0, 1).contiguous() # (T, C, H, W) => (C, T, H, W)
 
-                out[device_name] = data.contiguous()
+                out[device_name] = data
             else:
                 out[device_name] = self.transforms[device_name](data).squeeze(0)
 
