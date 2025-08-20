@@ -467,7 +467,8 @@ class ChunkDataset(Dataset):
                 transform_list.append(
                     torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
                 )
-
+            if len(transform_list) == 0:
+                transform_list.append(Lambda(lambda x: x))
             transforms[device_name] = Compose(transform_list)
         return transforms
     
