@@ -173,11 +173,13 @@ class ScreenInterpolator(Interpolator):
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
         normalize: bool = False,
+        interleave_value: typing.Optional[int] = None,
         **kwargs,
     ) -> None:
         """
         rescale would rescale images to the _image_size if true
         cache_data: if True, loads and keeps all trial data in memory
+        interleave_value: value to use for blank/invalid trials, defaults to None
         """
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
@@ -186,6 +188,7 @@ class ScreenInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
         self.cache_trials = cache_data  # Store the cache preference
+        self.interleave_value = interleave_value
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -271,11 +274,12 @@ class ScreenInterpolator(Interpolator):
 
         for key, metadata in zip(keys, metadatas):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
-            # Pass the cache_trials parameter when creating trials
+            # Pass the cache_trials and interleave_value parameters when creating trials
             self.trials.append(ScreenTrial.create(
                 data_file_name, 
                 metadata,
-                cache_data=self.cache_trials
+                cache_data=self.cache_trials,
+                interleave_value=self.interleave_value
             ))
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -336,6 +340,7 @@ class ScreenTrial:
         first_frame_idx: int,
         num_frames: int,
         cache_data: bool = False,
+        interleave_value: typing.Optional[int] = None,
     ) -> None:
         self.data_file_name = data_file_name
         self._meta_data = meta_data
@@ -345,15 +350,16 @@ class ScreenTrial:
         self.num_frames = num_frames
         self._cached_data = None
         self._cache_data = cache_data
+        self.interleave_value = interleave_value
         if self._cache_data:
             self._cached_data = self.get_data_()
 
     @staticmethod
-    def create(data_file_name: str, meta_data: dict, cache_data: bool = False) -> "ScreenTrial":
+    def create(data_file_name: str, meta_data: dict, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> "ScreenTrial":
         modality = meta_data.get("modality")
         class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
+        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data, interleave_value=interleave_value)
 
     def get_data_(self) -> np.array:
         """Base implementation for loading/generating data"""
@@ -370,7 +376,7 @@ class ScreenTrial:
 
 
 class ImageTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -382,7 +388,7 @@ class ImageTrial(ScreenTrial):
 
 
 class VideoTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -394,9 +400,8 @@ class VideoTrial(ScreenTrial):
 
 
 class BlankTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
-
-        self.interleave_value = meta_data.get("interleave_value")
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
+        self.interleave_value = interleave_value if interleave_value is not None else meta_data.get("interleave_value")
 
         super().__init__(
             data_file_name,
@@ -413,9 +418,8 @@ class BlankTrial(ScreenTrial):
 
 
 class InvalidTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
-
-        self.interleave_value = meta_data.get("interleave_value")
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
+        self.interleave_value = interleave_value if interleave_value is not None else meta_data.get("interleave_value")
 
         super().__init__(
             data_file_name,
