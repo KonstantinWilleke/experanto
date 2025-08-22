@@ -174,13 +174,20 @@ class ScreenInterpolator(Interpolator):
         rescale_size: typing.Optional[tuple(int, int)] = None,
         normalize: bool = False,
         interleave_value: typing.Optional[int] = None,
+        dtype: str = "uint8",
         **kwargs,
     ) -> None:
         """
         rescale would rescale images to the _image_size if true
         cache_data: if True, loads and keeps all trial data in memory
         interleave_value: value to use for blank/invalid trials, defaults to None
+        dtype: numpy dtype for the output array, defaults to "uint8"
         """
+        # Validate dtype parameter
+        valid_dtypes = ["uint8", "float16", "float32"]
+        if dtype not in valid_dtypes:
+            raise ValueError(f"dtype must be one of {valid_dtypes}, got {dtype}")
+        
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
         self.start_time = self.timestamps[0]
@@ -189,6 +196,7 @@ class ScreenInterpolator(Interpolator):
         self.rescale = rescale
         self.cache_trials = cache_data  # Store the cache preference
         self.interleave_value = interleave_value
+        self.dtype = dtype  # Store the dtype
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -274,12 +282,13 @@ class ScreenInterpolator(Interpolator):
 
         for key, metadata in zip(keys, metadatas):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
-            # Pass the cache_trials and interleave_value parameters when creating trials
+            # Pass the cache_trials, interleave_value, and dtype parameters when creating trials
             self.trials.append(ScreenTrial.create(
                 data_file_name, 
                 metadata,
                 cache_data=self.cache_trials,
-                interleave_value=self.interleave_value
+                interleave_value=self.interleave_value,
+                dtype=self.dtype
             ))
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -298,7 +307,7 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.uint8)
+        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=getattr(np, self.dtype))
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
@@ -341,6 +350,7 @@ class ScreenTrial:
         num_frames: int,
         cache_data: bool = False,
         interleave_value: typing.Optional[int] = None,
+        dtype: str = "uint8",
     ) -> None:
         self.data_file_name = data_file_name
         self._meta_data = meta_data
@@ -351,15 +361,16 @@ class ScreenTrial:
         self._cached_data = None
         self._cache_data = cache_data
         self.interleave_value = interleave_value
+        self.dtype = dtype  # Store the dtype
         if self._cache_data:
             self._cached_data = self.get_data_()
 
     @staticmethod
-    def create(data_file_name: str, meta_data: dict, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> "ScreenTrial":
+    def create(data_file_name: str, meta_data: dict, cache_data: bool = False, interleave_value: typing.Optional[int] = None, dtype: str = "uint8") -> "ScreenTrial":
         modality = meta_data.get("modality")
         class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data, interleave_value=interleave_value)
+        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data, interleave_value=interleave_value, dtype=dtype)
 
     def get_data_(self) -> np.array:
         """Base implementation for loading/generating data"""
@@ -376,7 +387,7 @@ class ScreenTrial:
 
 
 class ImageTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None, dtype: str = "uint8") -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -384,11 +395,13 @@ class ImageTrial(ScreenTrial):
             meta_data.get("first_frame_idx"),
             1,
             cache_data=cache_data,
+            interleave_value=interleave_value,
+            dtype=dtype,
         )
 
 
 class VideoTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None, dtype: str = "uint8") -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -396,11 +409,14 @@ class VideoTrial(ScreenTrial):
             meta_data.get("first_frame_idx"),
             meta_data.get("num_frames"),
             cache_data=cache_data,
+            interleave_value=interleave_value,
+            dtype=dtype,
         )
 
 
 class BlankTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None, dtype: str = "uint8") -> None:
+        # Use the provided interleave_value if set, otherwise fall back to metadata
         self.interleave_value = interleave_value if interleave_value is not None else meta_data.get("interleave_value")
 
         super().__init__(
@@ -410,15 +426,18 @@ class BlankTrial(ScreenTrial):
             meta_data.get("first_frame_idx"),
             1,
             cache_data=cache_data,
+            interleave_value=interleave_value,
+            dtype=dtype,
         )
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.uint8)
+        # Use the specified dtype
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=getattr(np, self.dtype))
 
 
 class InvalidTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False, interleave_value: typing.Optional[int] = None, dtype: str = "uint8") -> None:
         self.interleave_value = interleave_value if interleave_value is not None else meta_data.get("interleave_value")
 
         super().__init__(
@@ -428,8 +447,11 @@ class InvalidTrial(ScreenTrial):
             meta_data.get("first_frame_idx"),
             1,
             cache_data=cache_data,
+            interleave_value=interleave_value,
+            dtype=dtype,
         )
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.uint8)
+        # Use the specified dtype
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=getattr(np, self.dtype))
