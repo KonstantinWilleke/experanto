@@ -374,6 +374,7 @@ class ScreenTrial:
 
     def get_data_(self) -> np.array:
         """Base implementation for loading/generating data"""
+        #TODO: use memory mapping to access larger numpy files
         return np.load(self.data_file_name)
 
     def get_data(self) -> np.array:

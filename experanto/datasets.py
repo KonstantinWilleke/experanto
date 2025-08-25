@@ -416,38 +416,36 @@ class ChunkDataset(Dataset):
         self._statistics = {}
         for device_name in self.device_names:
             self._statistics[device_name] = {}
-            # If modality should be normalized, load respective statistics from file.
-            if self.modality_config[device_name].transforms.get("normalization", False):
-                mode = self.modality_config[device_name].transforms.normalization
-                means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
-                stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
-                if device_name == "responses":
-                    if means.ndim == 1:
-                        means = means[None, :]
-                    if stds.ndim == 1:
-                        stds = stds[None, :]
-                    idx = stds[0, :] < 1 # response std shape: (1, n_neurons)
-                    stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
+            mode = self.modality_config[device_name].transforms.normalization
+            means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
+            stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
+            if device_name == "responses":
+                if means.ndim == 1:
+                    means = means[None, :]
+                if stds.ndim == 1:
+                    stds = stds[None, :]
+                idx = stds[0, :] < 1 # response std shape: (1, n_neurons)
+                stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
 
-                # if mode is a dict, it will override the means and stds
-                if not isinstance(mode, str):
-                    means = np.array(mode.get("means", means))
-                    stds = np.array(mode.get("stds", stds))
-                if mode == 'standardize':
-                    # If modality should only be standarized, set means to 0.
-                    means = np.zeros_like(means)
-                elif mode == 'recompute_responses':
-                     means = np.zeros_like(means)
-                     stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
-                elif mode == 'recompute_behavior':
-                     means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
-                     stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
-                elif mode == 'screen_default':
-                     means = np.array((80))
-                     stds = np.array((60))
+            # if mode is a dict, it will override the means and stds
+            if not isinstance(mode, str):
+                means = np.array(mode.get("means", means))
+                stds = np.array(mode.get("stds", stds))
+            if mode == 'standardize':
+                # If modality should only be standarized, set means to 0.
+                means = np.zeros_like(means)
+            elif mode == 'recompute_responses':
+                 means = np.zeros_like(means)
+                 stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
+            elif mode == 'recompute_behavior':
+                 means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
+                 stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
+            elif mode == 'screen_default':
+                 means = np.array((80))
+                 stds = np.array((60))
 
-                self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
-                self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
+            self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
+            self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
 
     def initialize_transforms(self):
