@@ -428,10 +428,10 @@ class ChunkDataset(Dataset):
                 stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
 
             # if mode is a dict, it will override the means and stds
-            if not isinstance(mode, str):
+            if not isinstance(mode, str) and mode is not None:
                 means = np.array(mode.get("means", means))
                 stds = np.array(mode.get("stds", stds))
-            if mode == 'standardize':
+            elif mode == 'standardize':
                 # If modality should only be standarized, set means to 0.
                 means = np.zeros_like(means)
             elif mode == 'recompute_responses':
