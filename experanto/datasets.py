@@ -428,7 +428,7 @@ class ChunkDataset(Dataset):
                 stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
 
             # if mode is a dict, it will override the means and stds
-            if not isinstance(mode, str) and mode is not None:
+            if isinstance(mode, dict):
                 means = np.array(mode.get("means", means))
                 stds = np.array(mode.get("stds", stds))
             elif mode == 'standardize':
