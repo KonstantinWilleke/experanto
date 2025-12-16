@@ -416,45 +416,37 @@ class ChunkDataset(Dataset):
         self._statistics = {}
         for device_name in self.device_names:
             self._statistics[device_name] = {}
-            # If modality should be normalized, load respective statistics from file.
-            if self.modality_config[device_name].transforms.get("normalization", False):
-                mode = self.modality_config[device_name].transforms.normalization
-                means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
-                stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
-                if device_name == "responses":
-                    if means.ndim == 1:
-                        means = means[None, :]
-                    if stds.ndim == 1:
-                        stds = stds[None, :]
-                    idx = stds[0, :] < 1 # response std shape: (1, n_neurons)
-                    stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
+            mode = self.modality_config[device_name].transforms.normalization
+            means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
+            stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
+            if device_name == "responses":
+                if means.ndim == 1:
+                    means = means[None, :]
+                if stds.ndim == 1:
+                    stds = stds[None, :]
+                idx = stds[0, :] < 1 # response std shape: (1, n_neurons)
+                stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
 
-                # if mode is a dict, it will override the means and stds
-                if not isinstance(mode, str):
-                    means = np.array(mode.get("means", means))
-                    stds = np.array(mode.get("stds", stds))
-                if mode == 'standardize':
-                    # If modality should only be standarized, set means to 0.
-                    means = np.zeros_like(means)
-                elif mode == 'recompute_responses':
-                     means = np.zeros_like(means)
-                     stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
-                elif mode == 'recompute_behavior':
-                     means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
-                     stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
-                elif mode == 'screen_default':
-                     means = np.array((80))
-                     stds = np.array((60))
+            # if mode is a dict, it will override the means and stds
+            if isinstance(mode, dict):
+                means = np.array(mode.get("means", means))
+                stds = np.array(mode.get("stds", stds))
+            elif mode == 'standardize':
+                # If modality should only be standarized, set means to 0.
+                means = np.zeros_like(means)
+            elif mode == 'recompute_responses':
+                 means = np.zeros_like(means)
+                 stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
+            elif mode == 'recompute_behavior':
+                 means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
+                 stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
+            elif mode == 'screen_default':
+                 means = np.array((80))
+                 stds = np.array((60))
 
-                self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
-                self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
+            self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
+            self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
-    @staticmethod
-    def add_channel_function(x):
-        if len(x.shape) == 3:
-            return torch.from_numpy(x[:, None, ...])
-        else:
-            return torch.from_numpy(x)
 
     def initialize_transforms(self):
         """
@@ -464,9 +456,7 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                add_channel = Lambda(self.add_channel_function)
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
-                transform_list.insert(0, add_channel)
             else:
                 transform_list = [ToTensor()]
 
@@ -475,7 +465,8 @@ class ChunkDataset(Dataset):
                 transform_list.append(
                     torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
                 )
-
+            if len(transform_list) == 0:
+                transform_list.append(Lambda(lambda x: x))
             transforms[device_name] = Compose(transform_list)
         return transforms
     
@@ -721,24 +712,29 @@ class ChunkDataset(Dataset):
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
 
-            data, _ = self._experiment.interpolate(times, device=device_name)
-            out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
+            data, _ = self._experiment.interpolate(times, device=device_name) # remove dim0 for response/eye_tracker/treadmill
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
-                if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
-                if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = out[device_name].transpose(0, 1)
+                if len(data.shape) == 3:
+                    data = torch.from_numpy(data[:, None, ...]).float()
+                else:
+                    data = torch.from_numpy(data).float()
 
-            #if device_name == 'responses':
-            #    if self._experiment.devices["responses"].use_phase_shifts:
-            #        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-            #        times = times[:, None] + phase_shifts[None, :]
+                data = self.transforms[device_name](data)
+
+                if data.shape[-1] == 3:
+                    data = data.permute(3, 0, 1, 2).contiguous() # (T, H, W, C) => (C, T, H, W)
+                if data.shape[0] == chunk_size:
+                    data = data.transpose(0, 1).contiguous() # (T, C, H, W) => (C, T, H, W)
+
+                out[device_name] = data
+            else:
+                out[device_name] = self.transforms[device_name](data).squeeze(0)
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
                 times = times - self._experiment.devices["responses"].start_time
-                times = times.to(torch.float32).contiguous()
+                times = times.float()
             timestamps[device_name] =  times
 
         out["timestamps"] = timestamps
@@ -747,17 +743,7 @@ class ChunkDataset(Dataset):
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
 
-        final_out = {}
-        for key in out:
-            if key in self.out_keys:
-                if key == "timestamps":
-                    final_out[key] = out[key]
-                elif not out[key].is_contiguous():
-                    final_out[key] = out[key].contiguous()
-                else:
-                    final_out[key] = out[key]
-
-        return final_out
+        return out
     
     def reset_state(self):
         """Reset the state of the dataset."""
