@@ -14,7 +14,7 @@ dataset:
       sample_stride: 1
       include_blanks: true
       transforms:
-        normalization: null
+        normalization: False
       interpolation:
         rescale: False
         rescale_size: null
@@ -51,7 +51,7 @@ dataset:
 dataloader:
   batch_size: 8
   shuffle: true
-  num_workers: 2
+  num_workers: 8
   pin_memory: False
   drop_last: True
   prefetch_factor: 2
@@ -67,4 +67,5 @@ distributed:
   datasets_per_rank: 1
   sync_epochs: True
   min_samples_per_epoch: 10000
-  max_batches: 5000
+  max_batches: 1000
+  move_to_device: True
