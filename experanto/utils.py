@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional, List, Iterator, Union, Tuple, Sequence, Literal
+from collections import defaultdict
 
 # inbuilt libraries
 import os
@@ -18,14 +19,105 @@ from collections import defaultdict
 
 # third-party libraries
 import numpy as np
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
+from omegaconf import open_dict
 import torch
+from torch import Tensor
 from torch.utils.data import ConcatDataset, Dataset, DataLoader, Sampler
 
 # local libraries
 from .intervals import TimeInterval
 
+
 logger = logging.getLogger(__name__)
+
+
+def handle_responses_field(cfg):
+    """Ensures the config has a properly set responses field for neural response data."""
+    if not hasattr(cfg.dataset.modality_config, "responses"):
+        responses_fields = []
+        for field_name in dir(cfg.dataset.modality_config):
+            if "responses" in field_name and not field_name.startswith("_"):
+                responses_fields.append(field_name)
+        if len(responses_fields) == 0:
+            raise ValueError(
+                "No 'responses' field found in cfg.dataset.modality_config and no fields containing 'responses' were found"
+            )
+        elif len(responses_fields) == 1:
+            source_field = responses_fields[0]
+            source_config = getattr(cfg.dataset.modality_config, source_field)
+            with open_dict(cfg):
+                cfg.dataset.modality_config.responses = source_config
+            logger.info(f"Created cfg.dataset.modality_config.responses by copying from {source_field}")
+        else:
+            raise ValueError(
+                f"Multiple fields containing 'responses' found in cfg.dataset.modality_config: {responses_fields}. Please specify which one to use by creating cfg.dataset.modality_config.responses explicitly."
+            )
+    return cfg
+
+
+def move_data_to_device(
+    data: Any,
+    device: Union[torch.device, str],
+    dtype: Optional[torch.dtype] = None,
+    non_blocking: bool = True
+) -> Any:
+    """
+    Recursively moves tensors in a nested structure (dict, list, tuple) to the target device,
+    optionally casts them to a specific dtype, and uses non-blocking transfers.
+
+    Args:
+        data: The data structure (potentially nested) containing tensors.
+        device: The target device (e.g., 'cuda', 'cpu', or torch.device object).
+        dtype: Optional target dtype for tensor casting (e.g., torch.bfloat16).
+        non_blocking: Whether to use non-blocking CUDA transfers. Recommended True
+                      when source tensors are in pinned memory.
+
+    Returns:
+        A new data structure mirroring the input, with tensors moved to the device
+        and potentially cast to the specified dtype. Other data types are preserved.
+    """
+    if isinstance(data, Tensor):
+        # Move tensor to device, optionally change dtype, use non_blocking
+        # Using data.to() is generally preferred over data.cuda() for device flexibility
+        return data.to(device=device, dtype=dtype, non_blocking=non_blocking)
+    elif isinstance(data, dict):
+        # Recursively process dictionary values
+        return {k: move_data_to_device(v, device, dtype, non_blocking) for k, v in data.items()}
+    elif isinstance(data, list):
+        # Recursively process list elements
+        return [move_data_to_device(elem, device, dtype, non_blocking) for elem in data]
+    elif isinstance(data, tuple):
+        # Recursively process tuple elements. Note: tuples are immutable, creates a new one.
+        return tuple(move_data_to_device(elem, device, dtype, non_blocking) for elem in data)
+    else:
+        # Return non-tensor data types as is
+        return data
+
+# Make transfer_batch_to_device use the optimized helper
+def transfer_batch_to_device(
+    batch: Tuple[str, Dict[str, Any]], # More general type hint for data dict
+    device: Union[torch.device, str],
+    dtype: Optional[torch.dtype] = None # Add dtype parameter
+) -> Tuple[str, Any]:
+    """
+    Transfer a batch (session_key, data_dict) to the specified device,
+    optionally casting tensor dtype using non-blocking transfers.
+
+    Args:
+        batch: A tuple of (session_key, data_dict) where data_dict contains tensors
+               or nested dictionaries/lists/tuples of tensors.
+        device: The target device.
+        dtype: Optional target dtype for tensor casting (e.g., torch.bfloat16).
+
+    Returns:
+        The same batch structure with tensors moved/cast to the specified device.
+    """
+    session_key, data = batch
+    # Use non_blocking=True by default, pass device and dtype
+    data = move_data_to_device(data, device, dtype=dtype, non_blocking=True)
+    return session_key, data
+
 
 
 def count_batches(indices: Sequence[Any], batch_size: int, drop_last: bool) -> int:
