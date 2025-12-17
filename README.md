@@ -43,7 +43,6 @@ experanto/
 - refer to the benchmarking.yaml to override default arguments
 
 `torchrun --standalone --nnodes=1 --nproc_per_node=4 --master_port=29400 run_distributed_dataloaders.py datapath.root="/path/to/data/"`
-
 - make sure to specify the directory where the example datasets sit in, i.e.:
   - `datapath.root="/path/to/data/"` 
 - override other arguments as needed, e.g.:
@@ -55,18 +54,10 @@ experanto/
 
 Example output
 ```
-[2025-03-14 01:34:36,495][__main__][INFO] - ===== Distributed Performance Summary =====
-[2025-03-14 01:34:36,495][__main__][INFO] - Average throughput across all ranks: 22287.65 frames/second
-[2025-03-14 01:34:36,495][__main__][INFO] - Min throughput: 20565.96, Max throughput: 26148.95
-[2025-03-14 01:34:36,495][__main__][INFO] - Throughput imbalance: 25.05%
-[2025-03-14 01:34:36,495][__main__][INFO] - Rank 0: Waiting for all processes to complete before cleanup...
-[2025-03-14 01:34:37,497][__main__][INFO] - All processes completed. Starting cleanup...
-[2025-03-14 01:34:37,867][__main__][INFO] - Rank 0: Successfully cleaned up process group
-[2025-03-14 01:34:37,867][__main__][INFO] - Rank 0: Finished profiling and cleanup complete
-[2025-03-14 01:34:37,984][__main__][INFO] - Rank 1: Successfully cleaned up process group
-[2025-03-14 01:34:37,985][__main__][INFO] - Rank 1: Finished profiling and cleanup complete
-[2025-03-14 01:34:38,162][__main__][INFO] - Rank 2: Successfully cleaned up process group
-[2025-03-14 01:34:38,163][__main__][INFO] - Rank 2: Finished profiling and cleanup complete
-[2025-03-14 01:34:38,368][__main__][INFO] - Rank 3: Successfully cleaned up process group
-[2025-03-14 01:34:38,368][__main__][INFO] - Rank 3: Finished profiling and cleanup complete
-```
+
+[2025-12-17 21:37:46,130][__main__][INFO] - ===== Distributed Performance Summary =====
+[2025-12-17 21:37:46,130][__main__][INFO] - Average throughput across all ranks: 2009.02 frames/second
+[2025-12-17 21:37:46,130][__main__][INFO] - Min throughput: 1969.14, Max throughput: 2092.32
+[2025-12-17 21:37:46,130][__main__][INFO] - Throughput imbalance: 6.13%
+[2025-12-17 21:37:46,153][__main__][INFO] - Rank 0: Waiting for all processes to complete before cleanup...
+[2025-12-17 21:37:47,154][__main__][INFO] - All processes completed. Starting cleanup...```
