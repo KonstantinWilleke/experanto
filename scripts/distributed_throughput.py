@@ -34,7 +34,7 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from experanto.dataloaders import get_multisession_concat_dataloader, LongCycler
-from experanto.utils import handle_responses_field
+from experanto.utils import handle_responses_field, transfer_batch_to_device
 
 # Set up logging
 logging.basicConfig(
@@ -291,8 +291,8 @@ def profile_dataloader(dataloader, cfg, max_batches=2000, dtype=torch.bfloat16, 
             break
 
         # Transfer to GPU
-        videos = batch["screen"].to("cuda", dtype, non_blocking=True).transpose(1, 2)
-        responses = batch["responses"].to("cuda", dtype, non_blocking=True)
+        if cfg.distributed.move_to_device:
+            batch = transfer_batch_to_device(batch, "cuda", dtype=None)  # dtype)
 
         # Track performance
         batches_since_last_report += 1
@@ -325,14 +325,14 @@ def profile_dataloader(dataloader, cfg, max_batches=2000, dtype=torch.bfloat16, 
         max_throughput = max(throughputs)
 
         logger.info(f"===== Distributed Performance Summary =====")
-        logger.info(f"Average throughput across all ranks: {avg_throughput:.2f} batches/second")
+        logger.info(f"Average throughput across all ranks: {avg_throughput:.2f} frames/second")
         logger.info(f"Min throughput: {min_throughput:.2f}, Max throughput: {max_throughput:.2f}")
         logger.info(f"Throughput imbalance: {(max_throughput - min_throughput) / avg_throughput * 100:.2f}%")
 
     return overall_throughput
 
 
-@hydra.main(config_path=f"{root}/configs", config_name="benchmarking", version_base=None)
+@hydra.main(config_path=f"{root}/configs", config_name="throughput_f16_prenorm", version_base=None)
 def main(cfg: DictConfig):
     """Main entry point for the distributed dataloader profiling."""
 
