@@ -28,6 +28,29 @@ from .intervals import TimeInterval
 logger = logging.getLogger(__name__)
 
 
+def handle_responses_field(cfg):
+    """Ensures the config has a properly set responses field for neural response data."""
+    if not hasattr(cfg.dataset.modality_config, "responses"):
+        responses_fields = []
+        for field_name in dir(cfg.dataset.modality_config):
+            if "responses" in field_name and not field_name.startswith("_"):
+                responses_fields.append(field_name)
+        if len(responses_fields) == 0:
+            raise ValueError(
+                "No 'responses' field found in cfg.dataset.modality_config and no fields containing 'responses' were found"
+            )
+        elif len(responses_fields) == 1:
+            source_field = responses_fields[0]
+            source_config = getattr(cfg.dataset.modality_config, source_field)
+            cfg.dataset.modality_config.responses = source_config
+            logger.info(f"Created cfg.dataset.modality_config.responses by copying from {source_field}")
+        else:
+            raise ValueError(
+                f"Multiple fields containing 'responses' found in cfg.dataset.modality_config: {responses_fields}. Please specify which one to use by creating cfg.dataset.modality_config.responses explicitly."
+            )
+    return cfg
+
+
 def count_batches(indices: Sequence[Any], batch_size: int, drop_last: bool) -> int:
     # Calculate number of batches
     if drop_last:
