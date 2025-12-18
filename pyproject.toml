@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "experanto"
+version = "0.0.1"
+description = "Python package to interpolate recordings and stimuli of neuroscience experiments and build model dataloaders."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "einops>=0.8.1",
+    "hydra-core",
+    "jaxtyping",
+    "jupyterlab",
+    "numpy==1.26.4",
+    "opencv-python==4.8.0.74",
+    "optree>=0.13.0",
+    "psutil>=7.0.0",
+    "python-dotenv>=1.1.0",
+    "pytorch_warmup",
+    "pyyaml",
+    "rootutils>=1.0.7",
+    "seaborn>=0.13.2",
+    "treescope",
+    "torch>=2.5.1",
+    "torchao>=0.11.0",
+    "torchcodec==0.4.0",
+    "torchinfo>=1.8.0",
+    "torchmetrics",
+    "torchtune",
+    "torchvision>=0.20.1",
+    "tqdm"
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["experanto*", "configs*"]
+
+[tool.setuptools.package-data]
+configs = ["*.yaml"]
+
+[tool.uv]
+index-url = "https://pypi.org/simple"
+package = true
+
+[tool.ruff]
+line-length = 99
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.hatch.metadata]
+allow-direct-references = true
