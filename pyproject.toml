@@ -25,7 +25,6 @@ dependencies = [
     "treescope",
     "torch>=2.5.1",
     "torchao>=0.11.0",
-    "torchcodec==0.4.0",
     "torchinfo>=1.8.0",
     "torchmetrics",
     "torchtune",
