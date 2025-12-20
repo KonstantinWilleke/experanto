@@ -13,7 +13,7 @@ dependencies = [
     "hydra-core",
     "jaxtyping",
     "jupyterlab",
-    "numpy==1.26.4",
+    "numpy>=1.26.4",
     "opencv-python==4.8.0.74",
     "optree>=0.13.0",
     "psutil>=7.0.0",
