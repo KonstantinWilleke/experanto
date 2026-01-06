@@ -29,7 +29,8 @@ dependencies = [
     "torchmetrics",
     "torchtune",
     "torchvision>=0.20.1",
-    "tqdm"
+    "tqdm",
+    "pyspiral>=0.6.13",
 ]
 
 [project.optional-dependencies]
