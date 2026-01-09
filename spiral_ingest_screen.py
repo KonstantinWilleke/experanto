@@ -9,6 +9,8 @@ import numpy as np
 from pathlib import Path
 import json
 
+from spiral.core.table.spec import Operation
+
 sp = Spiral()
 project = sp.project("external-805943")
 screens_table = project.table("screens")
@@ -78,7 +80,7 @@ def process_batch(batch_data):
     })
 
     # Take operations aborting the transaction. We want all workers to atomically commit.
-    return worker_tx.take()
+    return [op.to_json() for op in worker_tx.take()]
 
 def main():
     # Create root transaction
@@ -95,12 +97,12 @@ def main():
     ]
 
     # Process batches with multiprocessing
-    with mp.Pool(processes=4) as pool:
+    with mp.Pool(processes=8) as pool:
         all_ops = pool.map(process_batch, batch_data_list)
 
     # Add all ops to the root transaction
     for ops in all_ops:
-        tx.include(ops)
+        tx.include([Operation.from_json(op) for op in ops])
 
     # Commit the root transaction
     tx.commit(compact=True)
