@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "experanto"
@@ -32,14 +32,12 @@ dependencies = [
     "tqdm"
 ]
 
-[project.optional-dependencies]
-dev = ["pytest", "ruff"]
-
-[tool.setuptools.packages.find]
-include = ["experanto*", "configs*"]
+[tool.setuptools]
+package-dir = {"experanto.experanto_configs" = "configs"}
+packages = ["experanto", "experanto.experanto_configs"]
 
 [tool.setuptools.package-data]
-configs = ["*.yaml"]
+"experanto.experanto_configs" = ["*.yaml"]
 
 [tool.uv]
 index-url = "https://pypi.org/simple"
