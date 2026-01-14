@@ -7,7 +7,7 @@ name = "experanto"
 version = "0.0.1"
 description = "Python package to interpolate recordings and stimuli of neuroscience experiments and build model dataloaders."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "einops>=0.8.1",
     "hydra-core",
@@ -30,7 +30,7 @@ dependencies = [
     "torchtune",
     "torchvision>=0.20.1",
     "tqdm",
-    "pyspiral>=0.6.13",
+    "pyspiral>=0.9.6",
 ]
 
 [project.optional-dependencies]
