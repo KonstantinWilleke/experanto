@@ -105,7 +105,7 @@ def main():
         tx.include([Operation.from_json(op) for op in ops])
 
     # Commit the root transaction
-    tx.commit(compact=True)
+    tx.commit()
 
 if __name__ == "__main__":
     main()
