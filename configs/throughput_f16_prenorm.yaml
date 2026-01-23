@@ -58,14 +58,12 @@ dataloader:
 
 
 datapath:
-  files: ["35_3832003544063_1_V1",]
+  files: ["37_3843837605846_0_V3A_V4",]
   root: "/path/to/dataset" # path to the dataset root directory
 
 
 distributed:
-  backend: "nccl"
-  datasets_per_rank: 1
-  sync_epochs: True
   min_samples_per_epoch: 10000
   max_batches: 1000
-  move_to_device: True
+  move_to_device: False
+  enable_cuda: False

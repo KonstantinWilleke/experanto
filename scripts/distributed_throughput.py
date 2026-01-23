@@ -34,7 +34,7 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from experanto.dataloaders import get_multisession_concat_dataloader, LongCycler
-from experanto.utils import handle_responses_field, transfer_batch_to_device
+from experanto.utils import handle_responses_field, move_data_to_device
 
 # Set up logging
 logging.basicConfig(
@@ -44,34 +44,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def setup_distributed():
+def setup_distributed(enable_cuda=False):
+    dist.init_process_group(
+        backend='nccl' if enable_cuda else "gloo",
+        timeout=datetime.timedelta(minutes=1)
+    )
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-
-    # Set device before anything else
-    torch.cuda.set_device(local_rank)
-
-    # Initialize process group with timeout
-    dist.init_process_group(backend='nccl', timeout=datetime.timedelta(minutes=30))
-
-    world_size = dist.get_world_size()
     rank = dist.get_rank()
+    world_size = dist.get_world_size()
 
-    logger.info(f"Initialized process group: rank {rank}/{world_size}, local_rank: {local_rank}")
+    if enable_cuda:
+        torch.cuda.set_device(local_rank)
+        # Initialize process group with timeout
+        logger.info(f"Initialized process group: rank {rank}/{world_size}, local_rank: {local_rank}")
 
-    # NCCL test
-    tensor = torch.tensor([rank], dtype=torch.int64, device=f"cuda:{local_rank}")
-    gathered = [torch.zeros(1, dtype=torch.int64, device=f"cuda:{local_rank}")
-                for _ in range(world_size)]
+        # NCCL test
+        tensor = torch.tensor([rank], dtype=torch.int64, device=f"cuda:{local_rank}")
+        gathered = [torch.zeros(1, dtype=torch.int64, device=f"cuda:{local_rank}")
+                    for _ in range(world_size)]
 
-    # Add explicit barrier before all_gather
-    logger.info(f"Rank {rank}: Before barrier")
-    dist.barrier()
-    logger.info(f"Rank {rank}: After barrier, before all_gather")
+        # Add explicit barrier before all_gather
+        logger.info(f"Rank {rank}: Before barrier")
+        dist.barrier()
+        logger.info(f"Rank {rank}: After barrier, before all_gather")
 
-    dist.all_gather(gathered, tensor)
-    gathered = [t.item() for t in gathered]
+        dist.all_gather(gathered, tensor)
+        gathered = [t.item() for t in gathered]
 
-    logger.info(f"Rank {rank}: Can see processes {gathered}")
+        logger.info(f"Rank {rank}: Can see processes {gathered}")
     return rank, local_rank, world_size
 
 
@@ -292,7 +292,7 @@ def profile_dataloader(dataloader, cfg, max_batches=2000, dtype=torch.bfloat16, 
 
         # Transfer to GPU
         if cfg.distributed.move_to_device:
-            batch = transfer_batch_to_device(batch, "cuda", dtype=None)  # dtype)
+            _ = move_data_to_device(batch, "cuda", dtype=None)  # dtype)
 
         # Track performance
         batches_since_last_report += 1
@@ -338,7 +338,7 @@ def main(cfg: DictConfig):
 
     cfg = handle_responses_field(cfg)
     # Set up the distributed environment
-    rank, local_rank, world_size = setup_distributed()
+    rank, local_rank, world_size = setup_distributed(enable_cuda=cfg.distributed.enable_cuda)
 
     # Print configuration on rank 0
     if rank == 0:
