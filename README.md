@@ -41,7 +41,7 @@ experanto/
 - Simply run the run_distributed_throughput.py script in ./scripts
 - Refer to the benchmarking.yaml to override default arguments
 
-`torchrun --standalone --nnodes=1 --nproc_per_node=4 --master_port=29400 run_distributed_throughput.py datapath.root="/path/to/data/"`
+`torchrun --standalone --nnodes=1 --nproc_per_node=4 --master_port=29400 distributed_throughput.py datapath.root="/path/to/data/"`
 
 - Make sure to specify the directory where the example datasets sit in, i.e.:
   - `datapath.root="/path/to/data/"` 
