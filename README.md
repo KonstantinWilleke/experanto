@@ -41,13 +41,15 @@ experanto/
 - Simply run the run_distributed_throughput.py script in ./scripts
 - Refer to the benchmarking.yaml to override default arguments
 
-`torchrun --standalone --nnodes=1 --nproc_per_node=4 --master_port=29400 distributed_throughput.py datapath.root="/path/to/data/"`
+`uv run torchrun --standalone --nnodes=1 --nproc_per_node=4 --master_port=29400 distributed_throughput.py datapath.root="/mnt/data1/enigma/goliath_10_20_sandbox/" dataloader.num_workers=8 distributed.max_batches=1000 distributed.enable_cuda=true distributed.move_to_device=true datapath.files=["37_3843837605846_0_V3A_V4"]`
 
 - Make sure to specify the directory where the example datasets sit in, i.e.:
   - `datapath.root="/path/to/data/"` 
 - Override other arguments as needed, e.g.:
-  - `dataloader.batch_size=1`
   - `dataloader.pin_memory=True`
+  - `dataloader.num_workers=4`
+  - `distributed.enable_cuda=false`# for CPU benchmarking
+  - `distributed.move_to_device=false` # leave data on CPU
 
 ### Example output
 ```
