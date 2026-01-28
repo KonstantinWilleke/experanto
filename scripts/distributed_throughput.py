@@ -382,7 +382,8 @@ def main(cfg: DictConfig):
     # Clean up in a controlled manner
     try:
         # Ensure all CUDA operations are complete
-        torch.cuda.synchronize()
+        if cfg.distributed.enable_cuda:
+            torch.cuda.synchronize()
 
         # Clean up the process group
         dist.destroy_process_group()
