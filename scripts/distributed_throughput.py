@@ -290,9 +290,10 @@ def profile_dataloader(dataloader, cfg, max_batches=2000, dtype=torch.bfloat16, 
         if i >= max_batches:
             break
 
-        # Transfer to GPU
+        # Transfer to device
         if cfg.distributed.move_to_device:
-            _ = move_data_to_device(batch, "cuda", dtype=None)  # dtype)
+            device = "cuda" if cfg.distributed.enable_cuda else "cpu"
+            _ = move_data_to_device(batch, device, dtype=None)  # dtype)
 
         # Track performance
         batches_since_last_report += 1
