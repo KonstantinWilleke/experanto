@@ -347,7 +347,7 @@ class ChunkDataset(Dataset):
             cache_data=cache_data,
         )
         self.device_names = self._experiment.device_names
-        self.out_keys = out_keys or (list(self.device_names) + ["timestamps"])
+        self.out_keys = out_keys or list(self.device_names)
         self.normalize_timestamps = normalize_timestamps
 
         # Determine the intersection of valid time ranges across all devices
@@ -704,7 +704,7 @@ class ChunkDataset(Dataset):
         out = {}
         timestamps = {}
         s = self._valid_screen_times[idx]
-        for device_name in self.device_names:
+        for device_name in self.out_keys:
             sampling_rate = self.sampling_rates[device_name]
             chunk_size = self.chunk_sizes[device_name]
             chunk_s = chunk_size / sampling_rate
@@ -736,7 +736,6 @@ class ChunkDataset(Dataset):
                 times = times - self._experiment.devices["responses"].start_time
                 times = times.float()
             timestamps[device_name] =  times
-
         out["timestamps"] = timestamps
 
         #deprecated
