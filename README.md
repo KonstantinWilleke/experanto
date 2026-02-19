@@ -1,6 +1,5 @@
-#### fast-forward pytorch dataloaders for neuroscience 
- 
-[demo notebook](./examples/demo.ipynb)
+# Experanto
+Python package to interpolate recordings and stimuli of neuroscience experiments 
 
 ## Project structure
 

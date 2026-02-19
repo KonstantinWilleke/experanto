@@ -15,22 +15,7 @@ import json
 
 from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
-
-class TimeInterval(typing.NamedTuple):
-    start: float
-    end: float
-
-    def __contains__(self, time):
-        return self.start <= time < self.end
-
-    def intersect(self, times):
-        return (times >= self.start) & (times < self.end)
-
-    def __repr__(self) -> str:
-        return f"TimeInterval [{self.start}, {self.end})"
-
-    def __iter__(self):
-        return iter((self.start, self.end))
+from .intervals import TimeInterval
 
 
 class Interpolator:
@@ -56,13 +41,13 @@ class Interpolator:
         return np.any(self.valid_times(times))
 
     @staticmethod
-    def create(root_folder: str, **kwargs) -> "Interpolator":
+    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
         with open(Path(root_folder) / "meta.yml", "r") as file:
             meta_data = yaml.load(file, Loader=yaml.SafeLoader)
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Interpolator"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](root_folder, **kwargs)
+        return globals()[class_name](root_folder, cache_data, **kwargs)
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
@@ -72,6 +57,7 @@ class SequenceInterpolator(Interpolator):
     def __init__(
         self,
         root_folder: str,
+        cache_data: bool = False, # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
         interp_window: int = 5,
@@ -119,6 +105,11 @@ class SequenceInterpolator(Interpolator):
                 mode="r",
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
+
+        is_memmap = isinstance(self._data, np.memmap)
+        if cache_data and is_memmap:
+            self._data = np.array(self._data).astype(np.float32)  # Convert memmap to ndarray
+
         if self.normalize:
             self.normalize_init()
 
@@ -160,12 +151,12 @@ class SequenceInterpolator(Interpolator):
                 )
                 / self.time_delta
             ).astype(int)
-            data = np.take_along_axis(self._data, idx, axis=0)
+            data = np.take_along_axis(self._data, idx, axis=0).astype(np.float32)
         else:
             idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(
                 int
             )
-            data = self._data[idx]
+            data = self._data[idx].astype(np.float32)
         if self.interpolation_mode == "nearest_neighbor":
             return data, valid
         else:
@@ -178,6 +169,7 @@ class ScreenInterpolator(Interpolator):
     def __init__(
         self,
         root_folder: str,
+        cache_data: bool = False,  # New parameter
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
         normalize: bool = False,
@@ -185,6 +177,7 @@ class ScreenInterpolator(Interpolator):
     ) -> None:
         """
         rescale would rescale images to the _image_size if true
+        cache_data: if True, loads and keeps all trial data in memory
         """
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
@@ -192,6 +185,7 @@ class ScreenInterpolator(Interpolator):
         self.end_time = self.timestamps[-1]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
+        self.cache_trials = cache_data  # Store the cache preference
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -272,15 +266,17 @@ class ScreenInterpolator(Interpolator):
         return metadatas, keys
     
     def _parse_trials(self) -> None:
-
         self.trials = []
-
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas):
-
             data_file_name = self.root_folder / "data" / f"{key}.npy"
-            self.trials.append(ScreenTrial.create(data_file_name, metadata))
+            # Pass the cache_trials parameter when creating trials
+            self.trials.append(ScreenTrial.create(
+                data_file_name, 
+                metadata,
+                cache_data=self.cache_trials
+            ))
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
@@ -298,12 +294,13 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size))
+        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.float32)
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
             # TODO: revisit this for on the fly decoding
             if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (len(data.shape) < 4):
+
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             if self.rescale:
@@ -318,8 +315,6 @@ class ScreenInterpolator(Interpolator):
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        if self.normalize:
-            out = self.normalize_data(out)
         return out, valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
@@ -340,6 +335,7 @@ class ScreenTrial:
         image_size: tuple,
         first_frame_idx: int,
         num_frames: int,
+        cache_data: bool = False,
     ) -> None:
         self.data_file_name = data_file_name
         self._meta_data = meta_data
@@ -347,53 +343,89 @@ class ScreenTrial:
         self.image_size = image_size
         self.first_frame_idx = first_frame_idx
         self.num_frames = num_frames
+        self._cached_data = None
+        self._cache_data = cache_data
+        if self._cache_data:
+            self._cached_data = self.get_data_()
 
     @staticmethod
-    def create(data_file_name: str, meta_data: dict) -> "ScreenTrial":
+    def create(data_file_name: str, meta_data: dict, cache_data: bool = False) -> "ScreenTrial":
         modality = meta_data.get("modality")
-        class_name = modality.capitalize() + "Trial"
+        class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](data_file_name, meta_data)
+        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
+
+    def get_data_(self) -> np.array:
+        """Base implementation for loading/generating data"""
+        return np.load(self.data_file_name)
 
     def get_data(self) -> np.array:
-        return np.load(self.data_file_name)
+        """Wrapper that handles caching"""
+        if self._cached_data is not None:
+            return self._cached_data
+        return self.get_data_()
 
     def get_meta(self, property: str):
         return self._meta_data.get(property)
 
 
 class ImageTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
             meta_data,
             tuple(meta_data.get("image_size")),
             meta_data.get("first_frame_idx"),
             1,
+            cache_data=cache_data,
         )
 
 
 class VideoTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
             meta_data,
             tuple(meta_data.get("image_size")),
             meta_data.get("first_frame_idx"),
             meta_data.get("num_frames"),
+            cache_data=cache_data,
         )
 
 
 class BlankTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data) -> None:
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+
+        self.interleave_value = meta_data.get("interleave_value")
+
         super().__init__(
             data_file_name,
             meta_data,
             tuple(meta_data.get("image_size")),
             meta_data.get("first_frame_idx"),
             1,
+            cache_data=cache_data,
         )
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to generate blank data"""
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+
+
+class InvalidTrial(ScreenTrial):
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+
         self.interleave_value = meta_data.get("interleave_value")
 
-    def get_data(self) -> np.array:
-        return np.full((1,) + self.image_size, self.interleave_value)
+        super().__init__(
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            1,
+            cache_data=cache_data,
+        )
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to generate blank data"""
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
