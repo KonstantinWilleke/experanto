@@ -290,9 +290,10 @@ def profile_dataloader(dataloader, cfg, max_batches=2000, dtype=torch.bfloat16, 
         if i >= max_batches:
             break
 
-        # Transfer to GPU
+        # Transfer to device
         if cfg.distributed.move_to_device:
-            _ = move_data_to_device(batch, "cuda", dtype=None)  # dtype)
+            device = "cuda" if cfg.distributed.enable_cuda else "cpu"
+            _ = move_data_to_device(batch, device, dtype=None)  # dtype)
 
         # Track performance
         batches_since_last_report += 1
@@ -315,8 +316,9 @@ def profile_dataloader(dataloader, cfg, max_batches=2000, dtype=torch.bfloat16, 
     logger.info(f"Rank {rank}: Overall throughput: {frames_per_batch/1000:.1f}k frames/second over {total_time:.2f}s")
 
     # Gather statistics from all ranks
-    throughputs = [torch.tensor([0.0], device="cuda") for _ in range(world_size)]
-    dist.all_gather(throughputs, torch.tensor([overall_throughput], device="cuda"))
+    device = "cuda" if cfg.distributed.enable_cuda else "cpu"
+    throughputs = [torch.tensor([0.0], device=device) for _ in range(world_size)]
+    dist.all_gather(throughputs, torch.tensor([overall_throughput], device=device))
 
     if rank == 0:
         throughputs = [t.item() for t in throughputs]
@@ -380,7 +382,8 @@ def main(cfg: DictConfig):
     # Clean up in a controlled manner
     try:
         # Ensure all CUDA operations are complete
-        torch.cuda.synchronize()
+        if cfg.distributed.enable_cuda:
+            torch.cuda.synchronize()
 
         # Clean up the process group
         dist.destroy_process_group()
